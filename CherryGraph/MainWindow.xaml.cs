@@ -1,128 +1,107 @@
-﻿using Dapper;
-using Microsoft.Msagl.Drawing;
+﻿using Microsoft.Msagl.Drawing;
+using Microsoft.Msagl.Layout.Layered;
+using Microsoft.Msagl.Layout.MDS;
+using Microsoft.Msagl.Core.Routing;
+using System;
 using System.Windows;
 using System.Data.SQLite;
-using System.Collections.Generic;
 using System.Linq;
+using Dapper;
 
-namespace CherryGraph;
-
-public partial class MainWindow : Window
+namespace CherryGraph
 {
-    private const string DatabasePath = @"C:\Users\Brandon\Documents\Obsidian Vault\.cherrybomb.ctb~";
-
-    public MainWindow()
+    public partial class MainWindow : Window
     {
-        InitializeComponent();
-        Loaded += MainWindow_Loaded;
-    }
+        private const string DatabasePath = @"C:\Users\Brandon\Documents\Obsidian Vault\.cherrybomb.ctb~";
+        private enum LayoutType { Horizontal, Vertical, ForceDirected }
+        private LayoutType currentLayout = LayoutType.Horizontal;
 
-    private void MainWindow_Loaded(object sender, RoutedEventArgs e)
-    {
-        Graph graph = BuildGraphFromDatabase();
-        graphControl.Graph = graph;
-    }
-
-    private Graph BuildGraphFromDatabase()
-    {
-        Graph graph = new Graph();
-        graph.Attr.LayerDirection = LayerDirection.LR;
-
-        using (var connection = new SQLiteConnection($"Data Source={DatabasePath};Version=3;"))
+        public MainWindow()
         {
-            connection.Open();
+            InitializeComponent();
+            Loaded += MainWindow_Loaded;
+        }
 
-            // Query to get all nodes
-            var nodes = connection.Query<NodeData>("SELECT node_id, name FROM node").ToDictionary(n => n.node_id, n => n);
+        private void MainWindow_Loaded(object sender, RoutedEventArgs e)
+        {
+            DrawGraph();
+        }
 
-            // Query to get all parent-child relationships
-            var relationships = connection.Query<ChildrenData>("SELECT node_id, father_id FROM children").ToList();
-
-            // Create graph nodes
-            foreach (var node in nodes.Values)
+        private void DrawGraph()
+        {
+            try
             {
-                Node graphNode = graph.AddNode(node.node_id.ToString());
-                graphNode.LabelText = node.name;
-                graphNode.Attr.Shape = GetRandomShape();
-            }
+                var graph = new Graph();
 
-            // Create graph edges
-            foreach (var rel in relationships)
-            {
-                if (nodes.ContainsKey(rel.node_id) && nodes.ContainsKey(rel.father_id))
+                using (var connection = new SQLiteConnection($"Data Source={DatabasePath};Version=3;"))
                 {
-                    graph.AddEdge(rel.father_id.ToString(), rel.node_id.ToString());
+                    connection.Open();
+
+                    var nodes = connection.Query<NodeData>("SELECT node_id, name FROM node").ToDictionary(n => n.node_id, n => n);
+                    var relationships = connection.Query<ChildrenData>("SELECT node_id, father_id FROM children").ToList();
+
+                    foreach (var node in nodes.Values)
+                    {
+                        graph.AddNode(node.node_id.ToString()).LabelText = node.name;
+                    }
+
+                    foreach (var rel in relationships)
+                    {
+                        if (nodes.ContainsKey(rel.node_id) && nodes.ContainsKey(rel.father_id))
+                        {
+                            graph.AddEdge(rel.father_id.ToString(), rel.node_id.ToString());
+                        }
+                    }
                 }
+
+                ApplyLayout(graph);
+
+                graphControl.Graph = graph;
             }
-
-            // Determine root nodes (nodes without a parent)
-            var childNodes = relationships.Select(r => r.node_id).ToHashSet();
-            var rootNodes = nodes.Keys.Except(childNodes);
-
-            // Assign levels to nodes
-            AssignLevels(graph, rootNodes);
-        }
-
-        return graph;
-    }
-
-    private void AssignLevels(Graph graph, IEnumerable<long> nodeIds, int level = 0)
-    {
-        foreach (var nodeId in nodeIds)
-        {
-            var node = graph.FindNode(nodeId.ToString());
-            if (node != null)
+            catch (Exception ex)
             {
-                node.Attr.Shape = GetShapeForLevel(level);
-
-                var childIds = GetChildNodeIds(graph, node);
-                if (childIds.Any())
-                {
-                    AssignLevels(graph, childIds, level + 1);
-                }
+                MessageBox.Show($"Error drawing graph: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
-    }
 
-    private IEnumerable<long> GetChildNodeIds(Graph graph, Node parentNode)
-    {
-        return graph.Edges
-            .Where(e => e.Source == parentNode.Id)
-            .Select(e => long.Parse(e.Target));
-    }
-
-
-
-    private Shape GetShapeForLevel(int level)
-    {
-        switch (level % 7)
+        private void ApplyLayout(Graph graph)
         {
-            case 0: return Shape.Box;
-            case 1: return Shape.Diamond;
-            case 2: return Shape.Circle;
-            case 3: return Shape.Hexagon;
-            case 4: return Shape.Octagon;
-            case 5: return Shape.House;
-            case 6: return Shape.InvHouse;
-            default: return Shape.Box;
+            switch (currentLayout)
+            {
+                case LayoutType.Horizontal:
+                    graph.Attr.LayerDirection = LayerDirection.LR;
+                    graph.LayoutAlgorithmSettings = new SugiyamaLayoutSettings
+                    {
+                        EdgeRoutingSettings = new EdgeRoutingSettings { EdgeRoutingMode = EdgeRoutingMode.Rectilinear }
+                    };
+                    break;
+
+                case LayoutType.Vertical:
+                    graph.Attr.LayerDirection = LayerDirection.TB;
+                    graph.LayoutAlgorithmSettings = new SugiyamaLayoutSettings
+                    {
+                        EdgeRoutingSettings = new EdgeRoutingSettings { EdgeRoutingMode = EdgeRoutingMode.Rectilinear }
+                    };
+                    break;
+
+                case LayoutType.ForceDirected:
+                    graph.LayoutAlgorithmSettings = new MdsLayoutSettings
+                    {
+                        EdgeRoutingSettings = new EdgeRoutingSettings { EdgeRoutingMode = EdgeRoutingMode.Spline },
+                       // AdjustLayout = true,
+                        //MaxIterations = 50,
+                       // RepulsiveForceConstant = 2.0,
+                        //SpringConstant = 0.5
+                    };
+                    break;
+            }
+        }
+
+        private void ToggleLayout_Click(object sender, RoutedEventArgs e)
+        {
+            currentLayout = (LayoutType)(((int)currentLayout + 1) % 3);
+            DrawGraph();
         }
     }
 
-    private Shape GetRandomShape()
-    {
-        var shapes = new[] { Shape.Box, Shape.Diamond, Shape.Circle, Shape.Hexagon, Shape.Octagon, Shape.House, Shape.InvHouse };
-        return shapes[new Random().Next(shapes.Length)];
-    }
-}
-
-public class NodeData
-{
-    public long node_id { get; set; }
-    public string name { get; set; }
-}
-
-public class ChildrenData
-{
-    public long node_id { get; set; }
-    public long father_id { get; set; }
 }

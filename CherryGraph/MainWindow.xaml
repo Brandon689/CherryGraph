@@ -7,5 +7,12 @@
         xmlns:wpfgraphcontrol="http://mlsagl"
         mc:Ignorable="d"
         Title="MainWindow" Height="350" Width="525">
-    <wpfgraphcontrol:AutomaticGraphLayoutControl x:Name="graphControl" />
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        <Button Content="Toggle Layout" Click="ToggleLayout_Click" Margin="10"/>
+        <wpfgraphcontrol:AutomaticGraphLayoutControl x:Name="graphControl" Grid.Row="1" />
+    </Grid>
 </Window>
