@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <OutputType>WinExe</OutputType>
+    <OutputType>Exe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -12,6 +12,8 @@
     <PackageReference Include="AutomaticGraphLayout" Version="1.1.12" />
     <PackageReference Include="AutomaticGraphLayout.Drawing" Version="1.1.12" />
     <PackageReference Include="AutomaticGraphLayout.WpfGraphControl" Version="1.1.12" />
+    <PackageReference Include="Dapper" Version="2.1.35" />
+    <PackageReference Include="System.Data.SQLite" Version="1.0.118" />
   </ItemGroup>
 
 </Project>
